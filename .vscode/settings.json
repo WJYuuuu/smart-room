@@ -1,0 +1,17 @@
+{
+    "files.associations": {
+        "new": "cpp",
+        "functional": "cpp",
+        "type_traits": "cpp",
+        "sstream": "cpp",
+        "string": "cpp"
+    },
+    "editor.cursorSmoothCaretAnimation": "on",
+    "editor.cursorBlinking": "smooth",
+    "editor.cursorStyle": "block",
+    "editor.cursorSurroundingLines": 10,
+    "editor.cursorSurroundingLinesStyle": "all",
+    "editor.cursorWidth": 20,
+    "editor.cursorHeight": 5,
+    "editor.find.cursorMoveOnType": true
+}
