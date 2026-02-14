@@ -2,7 +2,8 @@
 #define __TOOLS_H_
 
 #include <Arduino.h>
-
+#include <time.h>
+#include "main.h"
 
 class Tools { 
 public:
@@ -13,7 +14,7 @@ public:
 
     // 模板函数：打印字符串
     template <class T>
-    static size_t myPrintf(T str);
+    static size_t myPrint(T str);
 
     // 模板函数：打印字符串并换行
     template <class T> 
@@ -29,17 +30,32 @@ void Tools::init() {
 }
 
 template <class T>
-size_t Tools::myPrintf(T str) {
+size_t Tools::myPrint(T str) {
+    //互斥访问临界区
+    size_t ret = -1;
+    if(xSemaphoreTake(xMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        //获取到了互斥锁xMutex
+        ret = Serial.print(str);
+        
+        //注意后期加入TCP LOG
 
+        xSemaphoreGive(xMutex);
+    }
+    return ret;
 }
 
 template <class T>
 size_t Tools::myPrintln(T str) {
-    //先检查互斥锁是否还没创建!
-    //避免重复创建,第一次打印的时候才会创建
-    if( xMutex == nullptr) {
+    //互斥访问临界区
+    size_t ret  = -1;
+    if(xSemaphoreTake(xMutex, pdMS_TO_TICKS(100)) == pdTRUE){
+        ret = Serial.println(str);
 
+        //注意后期加入TCP LOG
+
+        xSemaphoreGive(xMutex);    
     }
+    return ret;
 }
 
 #endif

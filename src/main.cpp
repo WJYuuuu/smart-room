@@ -2,6 +2,8 @@
  * 2026/2/14 WangJingYu   云茂智慧楼宇
  */
  #include "main.h"
+#include "Tools.h"
+#include <WiFi.h>
 
  //WIFI账号密码
  char ssid[20] = "BOLU";
@@ -19,15 +21,22 @@ bool connectWIFI();
 
 
 void setup() {
-
+    Tools::init();    //初始化工具类,创建互斥锁
 }
 
 void loop() {
 
 }
 
-bool connectWIFI(){
-    bool tag = false;
+bool connectWIFI() {
+    Tools::myPrint("ESP32正在连接WIFI:");
+    Tools::myPrint(ssid);
+    WiFi.begin(ssid, password);
 
-    return tag;
+    while(WiFi.status() == WL_CONNECTED){
+        Tools::myPrintln("ESP32连接WIFI成功!IP:" + WiFi.localIP().toString());
+        
+    }
+    
+
 }
