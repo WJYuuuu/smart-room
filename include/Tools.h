@@ -21,14 +21,6 @@ public:
     static size_t myPrintln(T str);
 };
 
-
-// 初始化的时候直接创建,防止并发创建xMutex
-void Tools::init() {
-    if(xMutex == nullptr){
-        xMutex = xSemaphoreCreateMutex();
-    }
-}
-
 template <class T>
 size_t Tools::myPrint(T str) {
     //互斥访问临界区

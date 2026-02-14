@@ -3,9 +3,11 @@
 
 #include <Arduino.h>
 #include "Tools.h"
+#include "protocol.h"
 
 class Device {
 public:
+
     //单例模式创建,保证全局只有一个实例
     static Device &getInstance();//Device & 表示函数返回的是一个Device的引用,不是拷贝
 
@@ -45,8 +47,9 @@ private:
     Device();
     char ip[16];
     int8_t floor;
+    char room[MSG_LENGTH];
 
-    SemaphoreHandle_t dMutex;   //防止多个任务同时读写Device成员造成脏数据
+   static  SemaphoreHandle_t dMutex;   //防止多个任务同时读写Device成员造成脏数据
 
 };
 

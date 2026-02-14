@@ -23,8 +23,44 @@ const char *Device::getIp() const {
 }
 
 void Device::setIp(const char *newIp) {
-       
+       if(newIp){
+              strncpy(ip, newIp, sizeof(ip)-1);
+              ip[sizeof(ip)-1] = '\0';
+       }
 }
+
+/**
+ * 读楼层
+ */
+int8_t Device::getFloor() const{
+       return floor;
+}
+
+/**
+ * 设置楼层
+ */
+void Device::setFloor(int8_t newFloor){
+       floor = newFloor;
+}
+
+/**
+ * 读房间号
+ */
+const char *Device::getRoom() const {
+       return room;
+}
+ /**
+  * 设置房间号
+  */
+void Device::setRoom(const char *newRoom) {
+       if(newRoom){
+              strncpy(room, newRoom, sizeof(room)-1);
+              room[sizeof(room)-1] = '\0';
+       }
+}
+
+
+
 
 /**
  * 析构函数,当对象被销毁时调用!
