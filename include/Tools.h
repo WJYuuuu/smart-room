@@ -5,6 +5,15 @@
 #include <time.h>
 #include "main.h"
 
+//定义引脚
+#define LIGHT_PIN 15    //灯光引脚
+#define AC_PIN 19   //空调引脚
+#define PLUGE_PIN 18    //插座引脚
+
+
+extern bool isWiFiConnect;
+
+
 class Tools { 
 public:
     static SemaphoreHandle_t xMutex;    //定义一个互斥锁(是互斥锁还是信号量取决于怎么创建它)

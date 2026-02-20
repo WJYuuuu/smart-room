@@ -60,6 +60,14 @@ void Device::setRoom(const char *newRoom) {
 }
 
 
+/**
+ * 根据索引设置继电器状态
+ */
+void Device::setJdStaAt(size_t index, int8_t value) {
+       if(index < MAX_JD_NUM) {
+              jd_sta[index] = value;
+       }
+}
 
 
 /**

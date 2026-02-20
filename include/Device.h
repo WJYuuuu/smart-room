@@ -28,11 +28,16 @@ public:
     void setRoom(const char *newRoom);
 
     //继电器数量
+    const int8_t *getJdSta() const;
+    void setJdSta(const int8_t *sta, size_t len);
 
     //继电器状态
+    const int8_t *getJdSta() const;
+    void setJdSta(const int8_t *sta, size_t len);//安全写入
 
     //单个继电器状态(按照索引)
-
+    int8_t getJdStaAt(size_t index) const;
+    void setJdStaAt(size_t index, int8_t value);//安全写入
 
     //雷达状态数组(按照索引)
 
@@ -48,6 +53,8 @@ private:
     char ip[16];
     int8_t floor;
     char room[MSG_LENGTH];
+    uint8_t jd_num;    //继电器数量
+    int8_t jd_sta[MAX_JD_NUM];  //继电器状态数组
 
    static  SemaphoreHandle_t dMutex;   //防止多个任务同时读写Device成员造成脏数据
 

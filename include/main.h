@@ -3,4 +3,7 @@
 
 #include <Arduino.h>
 
+void DeviceSetUp();
+
+
 #endif

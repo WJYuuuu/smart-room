@@ -1,5 +1,8 @@
 #include "Tools.h"
 
+bool isWiFiConnect = false;
+
+
 SemaphoreHandle_t Tools::xMutex = nullptr;
 
 void Tools::init() {
