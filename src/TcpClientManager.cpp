@@ -5,6 +5,9 @@
 
 #define MIN(a,b) (((a)<(b)) ? (a) : (b))
 
+//constexpr:在编译时求值，用于定义常量和优化性能。
+static constexpr uint8_t OP_LOG_UPLOAD = 11; //日志上传操作码
+
 extern bool isWiFiConnect; //来自Tools, 表示WiFi是否已连接
 
 /*
@@ -252,15 +255,32 @@ void TcpClientManager::sendPacket(uint8_t op, const void *payload, size_t payloa
         h->td = 1; // 设备端发起
         h->op = op;
         memcpy(buffer+sizeof(HEAD), payload, payloadLen);
-        h->crc = calculate_crc16();
+        h->crc = calculate_crc16((uint8_t *)(buffer + sizeof(HEAD)), payloadLen);
+
+        //发送数据
+        client_.write((uint8_t *)buffer, sizeof(HEAD) + payloadLen);
+        if(op != OP_LOG_UPLOAD) {
+            Tools::myPrintln("📤 Sent op" + String(op));
+        }
     }
+    xSemaphoreGive(sendMutex_);
 }
 
 /**
  * 发送日志行到日志服务器
  */
 void TcpClientManager::sendLogLine(const char *logLine) {
-
+    if(!logUploadEnabled_)
+        return;
+    if(!logLine)
+        return;
+    
+    String line = String(logLine);
+    if(line.length() == 0)
+        return;
+    
+        int floor = Device::getInstance().getFloor();
+        
 }
 
 /**
