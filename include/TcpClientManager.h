@@ -55,7 +55,7 @@ private:
 
     //协议包发送
     void sendLoginPacket(); //op1
-    void sendHertbeatPacket(); //op5
+    void sendHeartbeatPacket(); //op5
     void sendOp7Request(); //op7:请求定时任务
 
     //协议包接收与解析
@@ -66,8 +66,8 @@ private:
     //定时任务管理
     void addScheduledTask(const DEVTIMECTRLBACK &task);
     void removeScheduledTaskById(int id);
-    void sendOp9Destory(int id); //op9:销毁任务
-    void checkAndExecuteScheduleTasks();
+    void sendOp9Destroy(int id); //op9:销毁任务
+    void checkAndExecuteScheduledTasks();
 
     //成员变量
     char serverIp_[16];
