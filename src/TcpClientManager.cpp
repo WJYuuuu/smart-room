@@ -279,47 +279,106 @@ void TcpClientManager::sendLogLine(const char *logLine) {
     if(line.length() == 0)
         return;
     
-        int floor = Device::getInstance().getFloor();
-        
+    int floor = Device::getInstance().getFloor();
+    const char *room = Device::getInstance().getRoom();
+    String roomStr = (room && strlen(room) > 0) ? String(room) : String("Unknown");
+    
+    String taggedLine = "floor=" + String(floor) + ";room=" + roomStr +";msg=" + line;
+
+    const size_t maxPayload = 900; //留出HEAD和CRC的空间
+    if(taggedLine.length() > maxPayload) {
+        taggedLine = taggedLine.substring(0, maxPayload);
+    }
+    if(!isWiFiConnect || !logClient_.connected()) 
+        return;
+    if(xSemaphoreTake(sendMutex_, 0) != pdTRUE)
+        return;
+
+    char buffer[1024] = {0};
+    HEAD *h = (HEAD *)buffer;
+    h->len = taggedLine.length();
+    h->td = 1; //设备端发起
+    h->op = OP_LOG_UPLOAD;
+    memcpy(buffer + sizeof(HEAD), taggedLine.c_str(), taggedLine.length());
+    h->crc = calculate_crc16((uint8_t *)(buffer + sizeof(HEAD)), taggedLine.length());
+    logClient_.write((uint8_t *)buffer, sizeof(HEAD)+taggedLine.length());
+    xSemaphoreGive(sendMutex_);
 }
 
 /**
  * 发送登录包(op1)
  */
 void TcpClientManager::sendLoginPacket() {
-
+    DEVLOGIN devLogin = {};
+    Device::getInstance().getDev(&devLogin.dev);
+    sendPacket(1, &devLogin, sizeof(DEVLOGIN));
 }
 
 /**
  * 发送状态包(op3)
  */
 void TcpClientManager::sendOp3Request() {
-
+    DEVSTA d = {};
+    Device::getInstance().getDev(&d.dev);
+    sendPacket(3, &d, sizeof(DEVSTA));
 }
 
 /**
  * 发送心跳包(op5)
  */
 void TcpClientManager::sendHeartbeatPacket() {
-
+    DEVHEART devHeart = {};
+    Device::getInstance().getDev(&devHeart.dev);
+    sendPacket(5, &devHeart, sizeof(DEVHEART));
 }
 
 /**
  * 发送请求定时任务包(op7)
  */
 void TcpClientManager::sendOp7Request() {
-
-}
+    DEVTIMECTRL req = {};
+    strcpy(req.room, Device::getInstance().getRoom());
+    req.floor = Device::getInstance().getFloor();
+    sendPacket(7, &req, sizeof(DEVTIMECTRL));
+};
 
 /**
  * 从TCP流读取原始字节,按照包边界解析并处理协议包
  */
 void TcpClientManager::handleIncomingData() {
+    while(client_.available() >= sizeof(HEAD)) {
+        uint8_t data[2048] = {0};
+        HEAD *head = (HEAD*)data;
+        uint8_t *payload = data + sizeof(HEAD);
 
+        //读取HEAD
+        client_.readBytes(data, sizeof(HEAD));
+        //检查长度是否合理
+        if(head->len > 1000 || head->len == 0){
+            Tools::myPrintln("📥 Invalid packet length");
+            continue;
+        }
+
+        //读消息体 payload
+        size_t readLen = client_.readBytes(payload, head->len);
+        if(readLen != head->len) {
+            continue; //读取不完整,丢弃
+        }
+
+        //校验CRC
+        uint16_t calcCrc = calculate_crc16(payload, head->len);
+        if(calcCrc != head->crc) {
+            Tools::myPrintln("📥 CRC error on op" + String(head->op));
+            continue;
+        }
+
+        //处理完整协议包
+        processPacket(data, sizeof(HEAD) + head->len);
+    }
 }
 
 /**
- * 根据op分发处理逻辑
+ * 根据op分发处理完整协议包
  */
 void TcpClientManager::processPacket(const uint8_t *fullPacket, size_t totalLen) {
 
