@@ -37,8 +37,7 @@ public:
 private:
     bool shouldExecute = false;
     static uint8_t g_currentRelayState; //当前继电器状态
-   
-    void setRelayOutPut(uint8_t mask, uint8_t state);
+    void setRelayOutput(uint8_t mask, uint8_t state);
     TcpClientManager() = default;
     ~TcpClientManager() = default;
     TcpClientManager(const TcpClientManager &) = delete;

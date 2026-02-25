@@ -15,9 +15,30 @@ uint16_t host_port = 20012;
 
 bool connectWiFi();     //判断wifi是否连接成功
 
+mqtt_begin();
 
 
 
 bool connectWiFi() {
-    Tools::myPrint();
+  Tools::myPrint("ESP32正在连接WiFi: ");
+  Tools::myPrint(ssid);
+  WiFi.begin(ssid, password);
+
+  // static unsigned long startTime = millis();
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    vTaskDelay(pdMS_TO_TICKS(500));
+    Tools::myPrint(".");
+  }
+
+  if(WiFi.status() == WL_CONNECTED) {
+    Tools::myPrintln("✅ESP32->WiFi连接成功! IP: " + WiFi.localIP().toString());
+    Device::getInstance().setIp(WiFi.localIP().toString().c_str());
+    isWiFiConnect = true;
+    return true;
+  }
+  isWiFiConnect = false;
+  return false;
 }
+
+

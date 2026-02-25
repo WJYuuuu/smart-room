@@ -54,5 +54,10 @@ size_t Tools::myPrintln(T str) {
     return ret;
 }
 
+int parseTimeToSeconds(const char *timeStr);
+int getCurrentSecondsOfDay();
+bool isInTimeWindow(int nowSec, int startSec, int endSec);
+
+
 
 #endif

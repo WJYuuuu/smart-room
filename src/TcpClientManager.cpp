@@ -5,10 +5,17 @@
 
 #define MIN(a,b) (((a)<(b)) ? (a) : (b))
 
+uint8_t TcpClientManager::g_currentRelayState = 0x00;
+const uint8_t RELAY_PINS[3] = {LIGHT_PIN, AC_PIN, PLUG_PIN};
+static constexpr uint8_t SCHEDULE_ALLOWED_MASK = 0x00; // 继电器由雷达逻辑接管，禁用定时任务写继电器
+
+
 //constexpr:在编译时求值，用于定义常量和优化性能。
 static constexpr uint8_t OP_LOG_UPLOAD = 11; //日志上传操作码
 
 extern bool isWiFiConnect; //来自Tools, 表示WiFi是否已连接
+
+char nowTime[MSG_LENGTH];
 
 /*
 静态函数:
@@ -381,6 +388,70 @@ void TcpClientManager::handleIncomingData() {
  * 根据op分发处理完整协议包
  */
 void TcpClientManager::processPacket(const uint8_t *fullPacket, size_t totalLen) {
+    uint8_t data[2048] = {0};
+    memcpy(data, fullPacket, totalLen);
+    HEAD *h = (HEAD *)data;
+    uint8_t *payload = data + sizeof(HEAD);
+
+    Tools::myPrintln("📥 收到 op" + String(h->op) + " 的响应");
+
+    switch(h->op) {
+        case 2:
+        {
+            //op2:登录响应
+            const DEVLOGINBACK *back = (const DEVLOGINBACK *)payload;
+            Device::getInstance().setFd(back->fd);
+            Device::getInstance().setEq(back->eq);
+            Tools::myPrintln("✅ 对 op1 的响应 op");
+            break;
+        }
+        case 4:
+        {
+            //op4:对写入的响应
+            Tools::myPrintln("✅ 对 op3 的响应 op4");
+            break;
+        }
+        case 6:
+        {
+            //op6:心跳响应
+            lastHeartbeat_ = millis(); //更新心跳响应时间
+            Tools::myPrintln("✅ 对 op5 的响应 op6");
+
+            const DEVHEARTBACK *p = (const DEVHEARTBACK *)payload;
+            strcpy(nowTime, p->nowtime);
+            Device::getInstance().setEnable(p->enable);
+            Tools::myPrintln("⏰ 获取服务器时间: " + String(p->nowtime));
+            break;
+        }
+        case 8:
+        {
+            //op8: 服务器下发定时任务
+            const DEVTIMECTRLBACK_ARR *arr = (const DEVTIMECTRLBACK_ARR *)payload;
+            Tools::myPrintln("📥 收到 op8: 定时控制指令 (" + String(arr->num) + " 条)");
+            for(int i=0; i<arr->num&&i<BACK_SIZE;i++) {
+                addScheduledTask(arr->arr[i]);
+            }
+            break;
+        }
+        case 10:
+        {
+            //op10: 服务器下发销毁任务的响应
+            const DEVDESTROYBACK *res = (const DEVDESTROYBACK *)payload;
+            if(res->res == 1) {
+                Tools::myPrintln("✅ op9 销毁指令服务器确认成功");
+            }
+            else{
+                Tools::myPrintln("❌ op9 销毁失败");
+            }
+            break;
+        }
+        default:
+        {
+            Tools::myPrintln("❓ 未知 op: " + String(h->op));
+            break;
+        }
+
+    }
 
 }
 
@@ -388,34 +459,198 @@ void TcpClientManager::processPacket(const uint8_t *fullPacket, size_t totalLen)
  * 添加定时任务
  */
 void TcpClientManager::addScheduledTask(const DEVTIMECTRLBACK &task) {
-
+    for(int i=0; i<taskCount_;i++){
+        if(scheduledTasks_[i].id == task.id) {
+            return; //已存在相同ID的任务,不添加
+        }
+    }
+    if(taskCount_ < MAX_SCHEDULED_TASKS) {
+        scheduledTasks_[taskCount_++] = task;
+        char log[128];
+        sprintf(log, "✅ 添加新定时任务 ID=%d, mask=0x%02X, state=0x%02X", task.id, task.jd_mask, task.jd_state);
+        Tools::myPrintln(log);
+    }
 }
 
 /**
  * 移除指定ID任务
  */
 void TcpClientManager::removeScheduledTaskById(int id) {
-
+    for (int i = 0; i< taskCount_;i++) {
+        if(scheduledTasks_[i].id == id) {
+            //移除任务
+            for (int j = i; j < taskCount_ -1; j++) {
+                scheduledTasks_[j] = scheduledTasks_[j+1];
+            }
+            taskCount_--;
+            Tools::myPrintln("🗑️ 本地移除任务 ID=" + String(id));
+            return;
+        }
+    }
 }
 
 /**
  * 发送op9销毁任务
  */
 void TcpClientManager::sendOp9Destroy(int id) {
-
+    DEVDESTROY req = {};
+    req.id = id;
+    sendPacket(9, &req, sizeof(DEVDESTROY));
+    Tools::myPrintln("📤 发送 op9: 销毁任务 ID=" + String(id));
 }
 
 /**
  * 检查并执行所有定时任务
  */
-void TcpClientManager::checkAndExecuteScheduledTasks() {
+void TcpClientManager::checkAndExecuteScheduledTasks()
+{
+    time_t now = string_to_timestamp(nowTime);
+    if (now < 100000000)
+        return;
 
+    struct tm *t = localtime(&now);
+    int currentSec = t->tm_hour * 3600 + t->tm_min * 60 + t->tm_sec;
+    int currentWeekDay = t->tm_wday;
+    uint8_t todayBit = (currentWeekDay == 0) ? WEEK_SUN : (1 << (currentWeekDay - 1));
+    char dateStr[MSG_LENGTH];
+    strftime(dateStr, sizeof(dateStr), "%Y-%m-%d", t);
+    // Tools::myPrintln(dateStr);
+
+    uint8_t effectiveMask = 0;
+    uint8_t effectiveState = 0;
+
+    // 第一步：找出所有当前生效的任务，并合并控制状态
+    for (int i = 0; i < taskCount_; i++)
+    {
+        DEVTIMECTRLBACK &task = scheduledTasks_[i];
+        int startSec = parseTimeToSeconds(task.start_time);
+        int endSec = parseTimeToSeconds(task.end_time);
+        if (startSec == -1 || endSec == -1)
+            continue;
+
+        bool inWindow = isInTimeWindow(currentSec, startSec, endSec);
+        bool matchesDateOrRepeat = false;
+
+        if (task.t_type == REPEAT_ONCE && strcmp(task.date, dateStr) == 0)
+        {
+            matchesDateOrRepeat = true;
+        }
+        else if (task.t_type == REPEAT_DAILY)
+        {
+            matchesDateOrRepeat = true;
+        }
+        else if (task.t_type == REPEAT_WEEKLY && (task.week_mask & todayBit))
+        {
+            matchesDateOrRepeat = true;
+        }
+
+        if (inWindow && matchesDateOrRepeat)
+        {
+            effectiveMask |= task.jd_mask;
+            effectiveState |= (task.jd_state & task.jd_mask);
+        }
+    }
+
+    // 第二步：应用最终状态
+    effectiveMask &= SCHEDULE_ALLOWED_MASK;
+    effectiveState &= SCHEDULE_ALLOWED_MASK;
+
+    if (effectiveMask)
+    {
+        //
+        // printf("生效任务: mask=0x%02X, state=0x%02X\n", effectiveMask, effectiveState);
+        // 控制继电器...
+        // setRelayOutput(effectiveMask, effectiveState);
+        // shouldExecute = true;
+       
+        shouldExecute = false; // 恢复雷达控制
+    }
+    else
+    {
+        shouldExecute = false; // 恢复雷达控制
+    }
+
+    // 第三步：清理过期的 REPEAT_ONCE 任务
+    for (int i = 0; i < taskCount_;)
+    {
+        DEVTIMECTRLBACK &task = scheduledTasks_[i];
+        if (task.t_type != REPEAT_ONCE)
+        {
+            i++;
+            continue;
+        }
+        if (strcmp(task.date, dateStr) != 0)
+        {
+            i++;
+            continue;
+        }
+        int startSec = parseTimeToSeconds(task.start_time);
+        int endSec = parseTimeToSeconds(task.end_time);
+        if (startSec == -1 || endSec == -1)
+        {
+            i++;
+            continue;
+        }
+        bool inWindow = isInTimeWindow(currentSec, startSec, endSec);
+        if (currentSec > endSec) // !inWindow
+        {
+            sendOp9Destroy(task.id);
+            removeScheduledTaskById(task.id);
+            // 不 ++i，因为数组前移了
+        }
+        else
+        {
+            i++;
+        }
+    }
 }
 
-/**
- * 重连后处理
- */
-void TcpClientManager::handleReconnect() {
-
+// ========================
+// 重连后处理（目前仅重置状态）
+// ========================
+void TcpClientManager::handleReconnect()
+{
+    // 实际逻辑已在 run() 中处理，此处可留空或做额外初始化
+    taskCount_ = 0; // 可选：清空任务（通常不清，因服务器会重新下发）
 }
 
+// 在 TcpClientManager.cpp 中新增以下函数
+bool TcpClientManager::isConnected() const
+{
+    return isConnected_;
+}
+
+
+void TcpClientManager::setRelayOutput(uint8_t mask, uint8_t state)
+{
+    if (mask == 0) return;
+    uint8_t newState = (g_currentRelayState & ~mask) | (state & mask);
+    if (newState != g_currentRelayState) {
+        g_currentRelayState = newState;
+        writeRelayRegister(g_currentRelayState);
+    }
+}
+
+void writeRelayRegister(uint8_t state)
+{
+    uint8_t output = (~state) & 0x07; // 只取低3位，并取反
+
+    const int controllableIndexes[2] = {LIGHT_INDEX, PLUG_INDEX};
+    for (int idx = 0; idx < 2; idx++)
+    {
+        int i = controllableIndexes[idx];
+        digitalWrite(RELAY_PINS[i], (output & (1 << i)) ? HIGH : LOW);
+        Device::getInstance().setJdStaAt(i, ((state & (1 << i)) != 0) ? 1 : 2);
+        // 解释：
+        // 如果 output 的第 i 位是 1 → 写 HIGH（继电器 OFF）
+        // 如果是 0 → 写 LOW（继电器 ON）
+    }
+
+    digitalWrite(AC_PIN, HIGH);
+    Device::getInstance().setJdStaAt(AC_INDEX, 2);
+
+    char relayLog[96];
+    sprintf(relayLog, "写入继电器: state=0x%02X -> output=0x%02X", state, output);
+    Tools::myPrintln(relayLog);
+    Log_relayRadarSnapshot("TCP_WRITE_RELAY");
+}

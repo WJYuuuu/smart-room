@@ -17,5 +17,33 @@ void TcpLogUpload_send(const String &msg) {
         return;
     if (msg.length() == 0) 
 		return;
-	
+    TcpClientManager &tcp = TcpClientManager::getInstance();
+
+    g_tcpLogForwarding = true;
+    tcp.sendLogLine(msg.c_str());
+    g_tcpLogForwarding = false;
+}
+
+
+
+
+
+// 将 "HH:MM:SS" 转为从 00:00:00 开始的秒数（0 ~ 86399）
+int parseTimeToSeconds(const char *timeStr)
+{
+    if (!timeStr || strlen(timeStr) < 8)
+        return -1;
+
+    // 格式必须是 HH:MM:SS
+    int hour = (timeStr[0] - '0') * 10 + (timeStr[1] - '0');
+    int min = (timeStr[3] - '0') * 10 + (timeStr[4] - '0');
+    int sec = (timeStr[6] - '0') * 10 + (timeStr[7] - '0');
+
+    if (hour >= 0 && hour < 24 &&
+        min >= 0 && min < 60 &&
+        sec >= 0 && sec < 60)
+    {
+        return hour * 3600 + min * 60 + sec;
+    }
+    return -1; // 格式错误
 }

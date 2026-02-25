@@ -12,10 +12,6 @@
 #include <time.h>
 
 
-// 定时控制指令 (服务器下发) (op = 8)
-struct DEVTIMECTRLBACK {
-
-};
 
 /* ==================== 宏定义 ==================== */
 #define CRC16_POLYNOMIAL 0x8005 // CRC16-IBM (也称为 CRC-16-ANSI) 的多项式
@@ -30,6 +26,22 @@ struct DEVTIMECTRLBACK {
 #define PLUG_INDEX  2 //插座继电器索引
 
 
+//星期定义
+// 星期定义
+#define WEEK_MON (1 << 0)  // 1
+#define WEEK_TUE (1 << 1)  // 2
+#define WEEK_WED (1 << 2)  // 4
+#define WEEK_THU (1 << 3)  // 8
+#define WEEK_FRI (1 << 4)  // 16
+#define WEEK_SAT (1 << 5)  // 32
+#define WEEK_SUN (1 << 6)  // 64
+
+// 执行类型
+#define REPEAT_DISABLED     0
+#define REPEAT_ONCE			1  // 单次（仅执行一次，通常配合具体日期，但你未提日期，可理解为“立即”或“当天”）
+#define REPEAT_DAILY		2  // 每天
+#define REPEAT_WEEKLY		3  // 每周（根据 week_mask）
+
 /* ==================== 工具函数声明 ==================== */
 
 /**
@@ -40,7 +52,27 @@ struct DEVTIMECTRLBACK {
  */
 uint16_t calculate_crc16(const uint8_t* data, size_t length);
 
+/**
+ * @brief 获取当前时间戳
+ * @return time_t 当前时间戳
+ */
+time_t get_current_timestamp();
 
+/**
+ * @brief 将时间戳转换为字符串
+ * @param timestamp 输入的时间戳
+ * @param buffer 输出的字符串缓冲区
+ * @param buffer_size 缓冲区大小
+ * @return int 转换结果 0=成功, !0=失败
+ */
+int timestamp_to_string(time_t timestamp, char* buffer, size_t buffer_size);
+
+/**
+ * @brief 将时间字符串转换为时间戳
+ * @param str 输入的时间字符串
+ * @return time_t 转换后的时间戳, 转换失败返回-1
+ */
+time_t string_to_timestamp(const char* str);
 
 /* ==================== 协议公共头部 ==================== */
 
@@ -134,6 +166,7 @@ struct DEVHEART {
 struct DEVHEARTBACK {
     int fd; //连接标识符,服务器分配
     uint8_t enable; //设备启用状态 0=禁用, !0 启用
+    char nowtime[MSG_LENGTH]; //服务器当前时间字符串
 };
 
 //获取设置命令 op7
@@ -143,7 +176,7 @@ struct DEVTIMECTRL {
 };
 
 //定时控制指令 op8
-struct DEVTIMCTRLBACK {
+struct DEVTIMECTRLBACK {
    int id;
    char room[MSG_LENGTH];
    int8_t floor;
@@ -169,8 +202,8 @@ struct DEVDESTROY {
     int id; //要销毁的定时任务ID
 };
 
-//op10
-struct DEVSTROYBACK {
+//op10 
+struct DEVDESTROYBACK {
     int res; //销毁结果 1=成功  2：失败
 };
 
