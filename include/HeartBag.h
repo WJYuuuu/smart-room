@@ -17,6 +17,25 @@ public:
     void setTopic(String topic);
 
     String getSubTopic() const;
+    void setSubTopic(String topic);
+
+    String getHeartTopic() const;
+    void setHeartTopic(String topic);
+
+    uint16_t getIdTop() const;
+    void setIdTop(uint16_t val);
+
+    //心跳包主题索引
+    uint16_t getIdHeart() const;
+    void setIdHeart(uint16_t val);
+
+    int getSta() const;
+    void setSta(int val);
+
+    bool IsOnline() const;
+    void resetIsOnline(bool v = true);
+
+    uint8_t topnum;
 
 private:
     bool isOnline;
